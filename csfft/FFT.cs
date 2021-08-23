@@ -2,7 +2,7 @@ using System;
 
 namespace csfft
 {
-    class FFT
+    public class FFT
     {
         private int[] bitReverseTable;
 
