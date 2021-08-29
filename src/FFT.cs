@@ -223,16 +223,19 @@ namespace csfft
                 d = pt;
             }
 
-            for (int i = 0; i < pt; i++)
-            {
-                v[i] = (re[i] * re[i] + im[i] * im[i]) / d;
-            }
 
             if (db)
             {
                 for (int i = 0; i < pt; i++)
                 {
-                    v[i] = 10 * Math.Log10(v[i] / r2);
+                    v[i] = 10 * Math.Log10((re[i] * re[i] + im[i] * im[i]) / d / r2);
+                }
+            }
+            else
+            {
+                for (int i = 0; i < pt; i++)
+                {
+                    v[i] = (re[i] * re[i] + im[i] * im[i]) / d;
                 }
             }
 
