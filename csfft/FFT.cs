@@ -2,14 +2,20 @@ using System;
 
 namespace csfft
 {
+    public enum NormalizationFlags
+    {
+        DIV_BY_N,
+        DIV_BY_SQRT_N,
+        NODIV
+    }
+
     public class FFT
     {
         private int[] bitReverseTable;
 
-        private int _pt;
-        public int NumOfPoints { get { return _pt; } }
+        public int NumOfPoints { get; set; }
 
-        public int Order { get { return (int)Math.Log(_pt, 2); } }
+        public int Order { get { return (int)Math.Log(NumOfPoints, 2); } }
 
         private double[][] omegaRe;
         private double[][] omegaIm;
@@ -33,13 +39,39 @@ namespace csfft
             return r;
         }
 
+        private void normalize(double[] re, double[] im, NormalizationFlags flag)
+        {
+            if (flag == NormalizationFlags.NODIV)
+            {
+                return;
+            }
+
+            int pt = NumOfPoints;
+            double d = 1;
+
+            if (flag == NormalizationFlags.DIV_BY_N)
+            {
+                d = pt;
+            }
+            else if (flag == NormalizationFlags.DIV_BY_SQRT_N)
+            {
+                d = Math.Sqrt(pt);
+            }
+
+            for (int i = 0; i < pt; i++)
+            {
+                re[i] /= d;
+                im[i] /= d;
+            }
+        }
+
         public FFT(int numOfPoints)
         {
             if (!IsPow2(numOfPoints))
             {
                 throw new ArgumentException("The number of points must be a power of 2.");
             }
-            _pt = numOfPoints;
+            this.NumOfPoints = numOfPoints;
 
             // Precompute bit reversal subscripts.
             bitReverseTable = new int[numOfPoints];
@@ -69,9 +101,9 @@ namespace csfft
         }
 
         // Fwd FFT in-place
-        public void Fwd(double[] re, double[] im)
+        public void Fwd(double[] re, double[] im, NormalizationFlags flag = NormalizationFlags.NODIV)
         {
-            int pt = _pt;
+            int pt = NumOfPoints;
             int order = this.Order;
 
             if (re.Length < pt || im.Length < pt)
@@ -114,11 +146,13 @@ namespace csfft
                     }
                 }
             }
+
+            normalize(re, im, flag);
         }
 
-        public void FwdSimple(double[] re, double[] im)
+        public void FwdSimple(double[] re, double[] im, NormalizationFlags flag = NormalizationFlags.NODIV)
         {
-            int pt = _pt;
+            int pt = NumOfPoints;
             int order = this.Order;
 
             if (re.Length < pt || im.Length < pt)
@@ -164,6 +198,45 @@ namespace csfft
                     }
                 }
             }
+
+            normalize(re, im, flag);
+        }
+
+        // Fwd FFT in-place
+        public double[] FwdPower(double[] re, double[] im,
+                 bool db = false,
+                 double dbReference = 1,
+                 NormalizationFlags flag = NormalizationFlags.NODIV)
+        {
+            int pt = NumOfPoints;
+            Fwd(re, im, NormalizationFlags.NODIV);
+
+            double[] v = new double[pt];
+            double r2 = dbReference * dbReference;
+            double d = 1;
+            if (flag == NormalizationFlags.DIV_BY_N)
+            {
+                d = pt * pt;
+            }
+            else if (flag == NormalizationFlags.DIV_BY_SQRT_N)
+            {
+                d = pt;
+            }
+
+            for (int i = 0; i < pt; i++)
+            {
+                v[i] = (re[i] * re[i] + im[i] * im[i]) / d;
+            }
+
+            if (db)
+            {
+                for (int i = 0; i < pt; i++)
+                {
+                    v[i] = 10 * Math.Log10(v[i] / r2);
+                }
+            }
+
+            return v;
         }
     }
 }
