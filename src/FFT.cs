@@ -2,20 +2,21 @@ using System;
 
 namespace csfft
 {
-    public enum NormalizationFlags
-    {
-        DIV_BY_N,
-        DIV_BY_SQRT_N,
-        NODIV
-    }
+    public delegate void NormalizationFunction(double[] re, double[] im, int n);
+
+    public delegate double[] WindowFunction(int n);
 
     public class FFT
     {
         private int[] bitReverseTable;
 
+        private double[] wnd;
+
         public int NumOfPoints { get; set; }
 
         public int Order { get { return (int)Math.Log(NumOfPoints, 2); } }
+
+        public NormalizationFunction NormalizeFunc { get; set; }
 
         private double[][] omegaRe;
         private double[][] omegaIm;
@@ -39,39 +40,86 @@ namespace csfft
             return r;
         }
 
-        private void normalize(double[] re, double[] im, NormalizationFlags flag)
+        /// <summary>1 / N normalization function.</summary>
+        public static void DivByN(double[] re, double[] im, int n)
         {
-            if (flag == NormalizationFlags.NODIV)
+            if (re.Length < n || im.Length < n)
             {
-                return;
+                throw new RankException("The number of elements is insufficient for the order.");
             }
 
-            int pt = NumOfPoints;
-            double d = 1;
-
-            if (flag == NormalizationFlags.DIV_BY_N)
+            for (int i = 0; i < n; i++)
             {
-                d = pt;
-            }
-            else if (flag == NormalizationFlags.DIV_BY_SQRT_N)
-            {
-                d = Math.Sqrt(pt);
-            }
-
-            for (int i = 0; i < pt; i++)
-            {
-                re[i] /= d;
-                im[i] /= d;
+                re[i] /= n;
+                im[i] /= n;
             }
         }
 
-        public FFT(int numOfPoints)
+        /// <summary>1 / sqrt(N) normalization function.</summary>
+        public static void DivBySqrtN(double[] re, double[] im, int n)
+        {
+            if (re.Length < n || im.Length < n)
+            {
+                throw new RankException("The number of elements is insufficient for the order.");
+            }
+
+            double sqrtn = Math.Sqrt(n);
+            for (int i = 0; i < n; i++)
+            {
+                re[i] /= sqrtn;
+                im[i] /= sqrtn;
+            }
+        }
+
+        /// <summary>Normalization function that does nothing.</summary>
+        public static void NoDiv(double[] re, double[] im, int n)
+        {
+            if (re.Length < n || im.Length < n)
+            {
+                throw new RankException("The number of elements is insufficient for the order.");
+            }
+        }
+
+        /// <summary>hann window</summary>
+        public static double[] HannWindow(int n)
+        {
+            double[] wnd = new double[n];
+            for (int i = 0; i < n; i++)
+            {
+                wnd[i] = 0.5 - 0.5 * Math.Cos(2 * Math.PI * (1.0 / n) * i);
+            }
+            return wnd;
+        }
+
+        public static double[] RectangularWindow(int n)
+        {
+            double[] wnd = new double[n];
+            for (int i = 0; i < n; i++)
+            {
+                wnd[i] = 1;
+            }
+            return wnd;
+        }
+
+        public FFT(int numOfPoints, WindowFunction wndfunc = null, NormalizationFunction normfunc = null)
         {
             if (!IsPow2(numOfPoints))
             {
                 throw new ArgumentException("The number of points must be a power of 2.");
             }
             this.NumOfPoints = numOfPoints;
+
+            if (wndfunc == null)
+            {
+                wndfunc = RectangularWindow;
+            }
+            wnd = wndfunc(numOfPoints);
+
+            if (normfunc == null)
+            {
+                normfunc = NoDiv;
+            }
+            NormalizeFunc = normfunc;
 
             // Precompute bit reversal subscripts.
             bitReverseTable = new int[numOfPoints];
@@ -100,15 +148,31 @@ namespace csfft
             }
         }
 
-        // Fwd FFT in-place
-        public void Fwd(double[] re, double[] im, NormalizationFlags flag = NormalizationFlags.NODIV)
+        /// <summary>Forward FFT</summary>
+        public (double[], double[]) Fwd(double[] srcRe, double[] srcIm)
+        {
+            return Fwd(srcRe, 0, srcIm, 0);
+        }
+
+        /// <summary>Forward FFT</summary>
+        public (double[], double[]) Fwd(double[] srcRe, int reStart, double[] srcIm, int imStart)
         {
             int pt = NumOfPoints;
             int order = this.Order;
 
-            if (re.Length < pt || im.Length < pt)
+            if (srcRe.Length - reStart < pt || srcIm.Length - imStart < pt)
             {
-                throw new ArgumentException("The number of samples is insufficient for the number of points.");
+                throw new RankException("The number of samples is insufficient for the number of points.");
+            }
+
+            double[] re = new double[pt];
+            double[] im = new double[pt];
+
+            // apply window function
+            for (int i = 0; i < pt; i++)
+            {
+                re[i] = srcRe[i] * wnd[i];
+                im[i] = srcIm[i] * wnd[i];
             }
 
             // bit-reversal
@@ -147,17 +211,30 @@ namespace csfft
                 }
             }
 
-            normalize(re, im, flag);
+            this.NormalizeFunc(re, im, pt);
+
+            return (re, im);
         }
 
-        public void FwdSimple(double[] re, double[] im, NormalizationFlags flag = NormalizationFlags.NODIV)
+        /// <summary>Experimental implementation of forward FFT</summary>
+        public (double[], double[]) FwdSimple(double[] srcRe, int reStart, double[] srcIm, int imStart)
         {
             int pt = NumOfPoints;
             int order = this.Order;
 
-            if (re.Length < pt || im.Length < pt)
+            if (srcRe.Length - reStart < pt || srcIm.Length - imStart < pt)
             {
-                throw new ArgumentException("The number of samples is insufficient for the number of points.");
+                throw new RankException("The number of samples is insufficient for the number of points.");
+            }
+
+            double[] re = new double[pt];
+            double[] im = new double[pt];
+
+            // apply window function
+            for (int i = 0; i < pt; i++)
+            {
+                re[i] = srcRe[i] * wnd[i];
+                im[i] = srcIm[i] * wnd[i];
             }
 
             // bit-reversal
@@ -199,43 +276,39 @@ namespace csfft
                 }
             }
 
-            normalize(re, im, flag);
+            this.NormalizeFunc(re, im, pt);
+
+            return (re, im);
         }
 
-        // Fwd FFT in-place
-        public double[] FwdPower(double[] re, double[] im,
-                 bool db = false,
-                 double dbReference = 1,
-                 NormalizationFlags flag = NormalizationFlags.NODIV)
+        /// <summary>Forward FFT for power spectrum</summary>
+        public double[] FwdPower(double[] srcRe, double[] srcIm, bool db = false, double dbReference = 1)
+        {
+            return FwdPower(srcRe, 0, srcIm, 0, db, dbReference);
+        }
+        
+
+        /// <summary>Forward FFT for power spectrum</summary>
+        public double[] FwdPower(double[] srcRe, int reStart, double[] srcIm, int imStart, bool db = false, double dbReference = 1)
         {
             int pt = NumOfPoints;
-            Fwd(re, im, NormalizationFlags.NODIV);
+            (double[] re, double[] im) = Fwd(srcRe, reStart, srcIm, imStart);
 
             double[] v = new double[pt];
             double r2 = dbReference * dbReference;
-            double d = 1;
-            if (flag == NormalizationFlags.DIV_BY_N)
-            {
-                d = pt * pt;
-            }
-            else if (flag == NormalizationFlags.DIV_BY_SQRT_N)
-            {
-                d = pt;
-            }
-
 
             if (db)
             {
                 for (int i = 0; i < pt; i++)
                 {
-                    v[i] = 10 * Math.Log10((re[i] * re[i] + im[i] * im[i]) / d / r2);
+                    v[i] = 10 * Math.Log10((re[i] * re[i] + im[i] * im[i]) / r2);
                 }
             }
             else
             {
                 for (int i = 0; i < pt; i++)
                 {
-                    v[i] = (re[i] * re[i] + im[i] * im[i]) / d;
+                    v[i] = (re[i] * re[i] + im[i] * im[i]);
                 }
             }
 
