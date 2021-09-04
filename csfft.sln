@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.30114.105
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "csfft", "src\csfft.csproj", "{F3CFE79C-F03B-42A6-8EDB-907302045B5D}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "csfft", "src\csfft\csfft.csproj", "{F3CFE79C-F03B-42A6-8EDB-907302045B5D}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
