@@ -1,16 +1,17 @@
 using System;
+using System.Threading.Tasks;
 
 namespace csfft
 {
-    public delegate void NormalizationFunction(double[] re, double[] im, int n);
-
-    public delegate double[] WindowFunction(int n);
-
-    public class FFT
+    public class FFTs
     {
+        public delegate void NormalizationFunction(float[] re, float[] im, int n);
+
+        public delegate float[] WindowFunction(int n);
+
         private int[] bitReverseTable;
 
-        private double[] wnd;
+        private float[] wnd;
 
         public int NumOfPoints { get; set; }
 
@@ -18,8 +19,8 @@ namespace csfft
 
         public NormalizationFunction NormalizeFunc { get; set; }
 
-        private double[][] omegaRe;
-        private double[][] omegaIm;
+        private float[] _or;
+        private float[] _oi;
 
         public static bool IsPow2(int x)
         {
@@ -41,7 +42,7 @@ namespace csfft
         }
 
         /// <summary>1 / N normalization function.</summary>
-        public static void DivByN(double[] re, double[] im, int n)
+        public static void DivByN(float[] re, float[] im, int n)
         {
             if (re.Length < n || im.Length < n)
             {
@@ -56,14 +57,14 @@ namespace csfft
         }
 
         /// <summary>1 / sqrt(N) normalization function.</summary>
-        public static void DivBySqrtN(double[] re, double[] im, int n)
+        public static void DivBySqrtN(float[] re, float[] im, int n)
         {
             if (re.Length < n || im.Length < n)
             {
                 throw new RankException("The number of elements is insufficient for the order.");
             }
 
-            double sqrtn = Math.Sqrt(n);
+            float sqrtn = (float)Math.Sqrt(n);
             for (int i = 0; i < n; i++)
             {
                 re[i] /= sqrtn;
@@ -72,7 +73,7 @@ namespace csfft
         }
 
         /// <summary>Normalization function that does nothing.</summary>
-        public static void NoDiv(double[] re, double[] im, int n)
+        public static void NoDiv(float[] re, float[] im, int n)
         {
             if (re.Length < n || im.Length < n)
             {
@@ -81,19 +82,19 @@ namespace csfft
         }
 
         /// <summary>hann window</summary>
-        public static double[] HannWindow(int n)
+        public static float[] HannWindow(int n)
         {
-            double[] wnd = new double[n];
+            float[] wnd = new float[n];
             for (int i = 0; i < n; i++)
             {
-                wnd[i] = 0.5 - 0.5 * Math.Cos(2 * Math.PI * (1.0 / n) * i);
+                wnd[i] = (float)(0.5 - 0.5 * Math.Cos(2 * Math.PI * (1.0 / n) * i));
             }
             return wnd;
         }
 
-        public static double[] RectangularWindow(int n)
+        public static float[] RectangularWindow(int n)
         {
-            double[] wnd = new double[n];
+            float[] wnd = new float[n];
             for (int i = 0; i < n; i++)
             {
                 wnd[i] = 1;
@@ -101,7 +102,7 @@ namespace csfft
             return wnd;
         }
 
-        public FFT(int numOfPoints, WindowFunction wndfunc = null, NormalizationFunction normfunc = null)
+        public FFTs(int numOfPoints, WindowFunction wndfunc = null, NormalizationFunction normfunc = null)
         {
             if (!IsPow2(numOfPoints))
             {
@@ -129,33 +130,24 @@ namespace csfft
                 bitReverseTable[i] = j;
             }
 
-            // Precompute omega.
-            int order = this.Order;
-            omegaRe = new double[order][];
-            omegaIm = new double[order][];
-            for (int s = 1; s <= order; s++)
-            {
-                int m = (int)Math.Pow(2, s);
-
-                omegaRe[s - 1] = new double[m / 2];
-                omegaIm[s - 1] = new double[m / 2];
-
-                for (int j = 0; j < m / 2; j++)
-                {
-                    omegaRe[s - 1][j] = Math.Cos(-2 * Math.PI / m * j);
-                    omegaIm[s - 1][j] = Math.Sin(-2 * Math.PI / m * j);
-                }
+            // Precompute sin and cos.
+            int mmax = numOfPoints / 2;
+            _or = new float[mmax];
+            _oi = new float[mmax];
+            for(int i = 0; i < mmax; i++) {
+                _or[i] = (float)Math.Cos(-2 * Math.PI / numOfPoints * i);
+                _oi[i] = (float)Math.Sin(-2 * Math.PI / numOfPoints * i);
             }
         }
 
         /// <summary>Forward FFT</summary>
-        public (double[], double[]) Fwd(double[] srcRe, double[] srcIm)
+        public void Fwd(float[] srcRe, float[] srcIm, float[] dstRe, float[] dstIm)
         {
-            return Fwd(srcRe, 0, srcIm, 0);
+            Fwd(srcRe, 0, srcIm, 0, dstRe, dstIm);
         }
 
         /// <summary>Forward FFT</summary>
-        public (double[], double[]) Fwd(double[] srcRe, int reStart, double[] srcIm, int imStart)
+        public void Fwd(float[] srcRe, int reStart, float[] srcIm, int imStart, float[] dstRe, float[] dstIm)
         {
             int pt = NumOfPoints;
             int order = this.Order;
@@ -165,14 +157,11 @@ namespace csfft
                 throw new RankException("The number of samples is insufficient for the number of points.");
             }
 
-            double[] re = new double[pt];
-            double[] im = new double[pt];
-
             // apply window function
             for (int i = 0; i < pt; i++)
             {
-                re[i] = srcRe[i] * wnd[i];
-                im[i] = srcIm[i] * wnd[i];
+                dstRe[i] = srcRe[i] * wnd[i];
+                dstIm[i] = srcIm[i] * wnd[i];
             }
 
             // bit-reversal
@@ -181,43 +170,36 @@ namespace csfft
                 int j = bitReverseTable[i];
                 if (j > i)
                 {
-                    (re[j], re[i]) = (re[i], re[j]);
-                    (im[j], im[i]) = (im[i], im[j]);
+                    (dstRe[j], dstRe[i]) = (dstRe[i], dstRe[j]);
+                    (dstIm[j], dstIm[i]) = (dstIm[i], dstIm[j]);
                 }
             }
 
             for (int s = 1; s <= order; s++)
             {
                 int m = (int)Math.Pow(2, s);
-                double[] omr = omegaRe[s - 1];
-                double[] omi = omegaIm[s - 1];
-                for (int k = 0; k < pt; k += m)
-                {
-                    for (int j = 0; j < m / 2; j++)
-                    {
-                        double or = omr[j];
-                        double oi = omi[j];
-                        int kj = k + j;
-                        int kjm2 = k + j + m / 2;
-                        (double tr, double ti) = ((or * re[kjm2]) - (oi * im[kjm2]),
-                                      (or * im[kjm2]) + (oi * re[kjm2]));
-                        (double ur, double ui) = (re[kj],
-                                      im[kj]);
-                        (re[kj], im[kj]) = (ur + tr,
-                                    ui + ti);
-                        (re[kjm2], im[kjm2]) = (ur - tr,
-                                    ui - ti);
-                    }
+                int ofactor = pt / m;
+                for(int i = 0; i < pt / 2; i++) {
+                    int k = (i / (m / 2)) * m;
+                    int j = (k == 0) ? i : i % (k / 2);
+                    float or = _or[j * ofactor];
+                    float oi = _oi[j * ofactor];
+                    int kj = k + j;
+                    int kjm2 = k + j + m / 2;
+                    float tr = or * dstRe[kjm2] - oi * dstIm[kjm2];
+                    float ti = or * dstIm[kjm2] + oi * dstRe[kjm2];
+                    dstRe[kjm2] = dstRe[kj] - tr;
+                    dstIm[kjm2] = dstIm[kj] - ti;
+                    dstRe[kj] = dstRe[kj] + tr;
+                    dstIm[kj] = dstIm[kj] + ti;
                 }
             }
 
-            this.NormalizeFunc(re, im, pt);
-
-            return (re, im);
+            this.NormalizeFunc(dstRe, dstIm, pt);
         }
 
         /// <summary>Experimental implementation of forward FFT</summary>
-        public (double[], double[]) FwdSimple(double[] srcRe, int reStart, double[] srcIm, int imStart)
+        public (float[], float[]) FwdSimple(float[] srcRe, int reStart, float[] srcIm, int imStart)
         {
             int pt = NumOfPoints;
             int order = this.Order;
@@ -227,8 +209,8 @@ namespace csfft
                 throw new RankException("The number of samples is insufficient for the number of points.");
             }
 
-            double[] re = new double[pt];
-            double[] im = new double[pt];
+            float[] re = new float[pt];
+            float[] im = new float[pt];
 
             // apply window function
             for (int i = 0; i < pt; i++)
@@ -251,27 +233,22 @@ namespace csfft
             for (int s = 1; s <= order; s++)
             {
                 int m = (int)Math.Pow(2, s);
-                double omr = Math.Cos(-2 * Math.PI / m);
-                double omi = Math.Sin(-2 * Math.PI / m);
                 for (int k = 0; k < pt; k += m)
                 {
-                    double or = 1; // cos(0)
-                    double oi = 0; // sin(0)
                     for (int j = 0; j < m / 2; j++)
                     {
+                        float or = (float)Math.Cos(-2 * Math.PI / m * j);
+                        float oi = (float)Math.Sin(-2 * Math.PI / m * j);
                         int kj = k + j;
                         int kjm2 = k + j + m / 2;
-                        (double tr, double ti) = ((or * re[kjm2]) - (oi * im[kjm2]),
+                        (float tr, float ti) = ((or * re[kjm2]) - (oi * im[kjm2]),
                                       (or * im[kjm2]) + (oi * re[kjm2]));
-                        (double ur, double ui) = (re[kj],
+                        (float ur, float ui) = (re[kj],
                                       im[kj]);
                         (re[kj], im[kj]) = (ur + tr,
                                     ui + ti);
                         (re[kjm2], im[kjm2]) = (ur - tr,
                                     ui - ti);
-
-                        (or, oi) = (or * omr - oi * omi,
-                                or * omi + oi * omr); // Rotate by -2 * PI / m.
                     }
                 }
             }
@@ -282,37 +259,34 @@ namespace csfft
         }
 
         /// <summary>Forward FFT for power spectrum</summary>
-        public double[] FwdPower(double[] srcRe, double[] srcIm, bool db = false, double dbReference = 1)
+        public void FwdPower(float[] srcRe, float[] srcIm, float[] tempRe, float[] tempIm, float[] dst, bool db = false, float dbReference = 1)
         {
-            return FwdPower(srcRe, 0, srcIm, 0, db, dbReference);
+            FwdPower(srcRe, 0, srcIm, 0, tempRe, tempIm, dst, db, dbReference);
         }
-        
+
 
         /// <summary>Forward FFT for power spectrum</summary>
-        public double[] FwdPower(double[] srcRe, int reStart, double[] srcIm, int imStart, bool db = false, double dbReference = 1)
+        public void FwdPower(float[] srcRe, int reStart, float[] srcIm, int imStart, float[] tempRe, float[] tempIm, float[] dst, bool db = false, float dbReference = 1)
         {
             int pt = NumOfPoints;
-            (double[] re, double[] im) = Fwd(srcRe, reStart, srcIm, imStart);
+            Fwd(srcRe, reStart, srcIm, imStart, tempRe, tempIm);
 
-            double[] v = new double[pt];
-            double r2 = dbReference * dbReference;
+            float r2 = dbReference * dbReference;
 
             if (db)
             {
                 for (int i = 0; i < pt; i++)
                 {
-                    v[i] = 10 * Math.Log10((re[i] * re[i] + im[i] * im[i]) / r2);
+                    dst[i] = (float)(10 * Math.Log10((tempRe[i] * tempRe[i] + tempIm[i] * tempIm[i]) / r2));
                 }
             }
             else
             {
                 for (int i = 0; i < pt; i++)
                 {
-                    v[i] = (re[i] * re[i] + im[i] * im[i]);
+                    dst[i] = (tempRe[i] * tempRe[i] + tempIm[i] * tempIm[i]);
                 }
             }
-
-            return v;
         }
     }
 }
