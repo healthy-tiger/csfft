@@ -1,6 +1,5 @@
 using System;
 using System.Numerics;
-using System.Threading.Tasks;
 
 namespace csfft
 {
@@ -178,18 +177,19 @@ namespace csfft
                 {
                     int m = (int)Math.Pow(2, s);
                     int ofactor = pt / m;
-                    for (int i = 0; i < pt / 2; i++)
+                    for (int k = 0; k < pt; k += m)
                     {
-                        int k = (i / (m / 2)) * m;
-                        int j = (k == 0) ? i : i % (k / 2);
-                        Vector2* o = po + j * ofactor;
-                        Vector2* pkj = pdst + k + j;
-                        Vector2* pkjm2 = pkj + m / 2;
-                        Vector2 t;
-                        t.X = o->X * pkjm2->X - o->Y * pkjm2->Y;
-                        t.Y = o->X * pkjm2->Y + o->Y * pkjm2->X;
-                        *pkjm2 = *pkj - t;
-                        *pkj = *pkj + t;
+                        for (int j = 0; j < m / 2; j++)
+                        {
+                            Vector2* o = po + j * ofactor;
+                            Vector2* pkj = pdst + k + j;
+                            Vector2* pkjm2 = pkj + m / 2;
+                            Vector2 t;
+                            t.X = o->X * pkjm2->X - o->Y * pkjm2->Y;
+                            t.Y = o->X * pkjm2->Y + o->Y * pkjm2->X;
+                            *pkjm2 = *pkj - t;
+                            *pkj = *pkj + t;
+                        }
                     }
                 }
             }

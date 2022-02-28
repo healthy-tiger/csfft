@@ -133,7 +133,8 @@ namespace csfft
             int mmax = numOfPoints / 2;
             _or = new double[mmax];
             _oi = new double[mmax];
-            for(int i = 0; i < mmax; i++) {
+            for (int i = 0; i < mmax; i++)
+            {
                 _or[i] = Math.Cos(-2 * Math.PI / numOfPoints * i);
                 _oi[i] = Math.Sin(-2 * Math.PI / numOfPoints * i);
             }
@@ -178,19 +179,21 @@ namespace csfft
             {
                 int m = (int)Math.Pow(2, s);
                 int ofactor = pt / m;
-                for(int i = 0; i < pt / 2; i++) {
-                    int k = (i / (m / 2)) * m;
-                    int j = (k == 0) ? i : i % (k / 2);
-                    double or = _or[j * ofactor];
-                    double oi = _oi[j * ofactor];
-                    int kj = k + j;
-                    int kjm2 = k + j + m / 2;
-                    double tr = or * dstRe[kjm2] - oi * dstIm[kjm2];
-                    double ti = or * dstIm[kjm2] + oi * dstRe[kjm2];
-                    dstRe[kjm2] = dstRe[kj] - tr;
-                    dstIm[kjm2] = dstIm[kj] - ti;
-                    dstRe[kj] = dstRe[kj] + tr;
-                    dstIm[kj] = dstIm[kj] + ti;
+                for (int k = 0; k < pt; k += m)
+                {
+                    for (int j = 0; j < m / 2; j++)
+                    {
+                        double or = _or[j * ofactor];
+                        double oi = _oi[j * ofactor];
+                        int kj = k + j;
+                        int kjm2 = k + j + m / 2;
+                        double tr = or * dstRe[kjm2] - oi * dstIm[kjm2];
+                        double ti = or * dstIm[kjm2] + oi * dstRe[kjm2];
+                        dstRe[kjm2] = dstRe[kj] - tr;
+                        dstIm[kjm2] = dstIm[kj] - ti;
+                        dstRe[kj] = dstRe[kj] + tr;
+                        dstIm[kj] = dstIm[kj] + ti;
+                    }
                 }
             }
 

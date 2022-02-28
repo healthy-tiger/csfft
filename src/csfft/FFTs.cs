@@ -1,5 +1,4 @@
 using System;
-using System.Threading.Tasks;
 
 namespace csfft
 {
@@ -134,7 +133,8 @@ namespace csfft
             int mmax = numOfPoints / 2;
             _or = new float[mmax];
             _oi = new float[mmax];
-            for(int i = 0; i < mmax; i++) {
+            for (int i = 0; i < mmax; i++)
+            {
                 _or[i] = (float)Math.Cos(-2 * Math.PI / numOfPoints * i);
                 _oi[i] = (float)Math.Sin(-2 * Math.PI / numOfPoints * i);
             }
@@ -179,19 +179,21 @@ namespace csfft
             {
                 int m = (int)Math.Pow(2, s);
                 int ofactor = pt / m;
-                for(int i = 0; i < pt / 2; i++) {
-                    int k = (i / (m / 2)) * m;
-                    int j = (k == 0) ? i : i % (k / 2);
-                    float or = _or[j * ofactor];
-                    float oi = _oi[j * ofactor];
-                    int kj = k + j;
-                    int kjm2 = k + j + m / 2;
-                    float tr = or * dstRe[kjm2] - oi * dstIm[kjm2];
-                    float ti = or * dstIm[kjm2] + oi * dstRe[kjm2];
-                    dstRe[kjm2] = dstRe[kj] - tr;
-                    dstIm[kjm2] = dstIm[kj] - ti;
-                    dstRe[kj] = dstRe[kj] + tr;
-                    dstIm[kj] = dstIm[kj] + ti;
+                for (int k = 0; k < pt; k += m)
+                {
+                    for (int j = 0; j < m / 2; j++)
+                    {
+                        float or = _or[j * ofactor];
+                        float oi = _oi[j * ofactor];
+                        int kj = k + j;
+                        int kjm2 = k + j + m / 2;
+                        float tr = or * dstRe[kjm2] - oi * dstIm[kjm2];
+                        float ti = or * dstIm[kjm2] + oi * dstRe[kjm2];
+                        dstRe[kjm2] = dstRe[kj] - tr;
+                        dstIm[kjm2] = dstIm[kj] - ti;
+                        dstRe[kj] = dstRe[kj] + tr;
+                        dstIm[kj] = dstIm[kj] + ti;
+                    }
                 }
             }
 
